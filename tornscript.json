@@ -1,0 +1,83 @@
+[
+  {
+    "license_id": "MC-IND-0001",
+    "type": "individual",
+    "user_id": 123456,
+    "faction_id": null,
+    "tier": "newbie",
+    "status": "active",
+    "issued": "2026-01-01",
+    "expires": "2026-02-01",
+    "features": {
+      "newbie": true,
+      "trader": false,
+      "profit": false,
+      "branding": false
+    }
+  },
+  {
+    "license_id": "MC-IND-0002",
+    "type": "individual",
+    "user_id": 222222,
+    "faction_id": null,
+    "tier": "trader",
+    "status": "active",
+    "issued": "2026-01-05",
+    "expires": "2026-03-05",
+    "features": {
+      "newbie": true,
+      "trader": true,
+      "profit": true,
+      "branding": false
+    }
+  },
+  {
+    "license_id": "MC-FAC-0001",
+    "type": "faction",
+    "user_id": null,
+    "faction_id": 98765,
+    "tier": "faction",
+    "status": "active",
+    "issued": "2026-01-01",
+    "expires": "2026-04-01",
+    "max_users": 30,
+    "features": {
+      "newbie": true,
+      "trader": true,
+      "profit": true,
+      "branding": true
+    }
+  },
+  {
+    "license_id": "MC-IND-EXPIRED",
+    "type": "individual",
+    "user_id": 999999,
+    "faction_id": null,
+    "tier": "trader",
+    "status": "active",
+    "issued": "2025-11-01",
+    "expires": "2025-12-01",
+    "features": {
+      "newbie": true,
+      "trader": true,
+      "profit": true,
+      "branding": false
+    }
+  },
+  {
+    "license_id": "MC-IND-SUSPENDED",
+    "type": "individual",
+    "user_id": 888888,
+    "faction_id": null,
+    "tier": "trader",
+    "status": "suspended",
+    "issued": "2026-01-01",
+    "expires": "2026-03-01",
+    "features": {
+      "newbie": true,
+      "trader": true,
+      "profit": true,
+      "branding": false
+    }
+  }
+]
