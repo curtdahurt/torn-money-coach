@@ -6,8 +6,8 @@
 // @author       Curtdahurt
 // @match        https://www.torn.com/*
 // @grant        unsafeWindow
-// @updateURL    https://raw.githubusercontent.com/Curtdahurt/torn-money-coach/main/money_coach.user.js
-// @downloadURL  https://raw.githubusercontent.com/Curtdahurt/money_coach/main/money_coach.user.js
+// @updateURL    https://raw.githubusercontent.com/Curtdahurt/tornlicenses1/main/money_coach.user.js
+// @downloadURL  https://raw.githubusercontent.com/Curtdahurt/tornlicenses1/main/money_coach.user.js
 // ==/UserScript==
 
 (() => {
