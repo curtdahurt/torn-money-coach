@@ -28,8 +28,8 @@ A premium UserScript for **Torn City** that provides money guidance, profit trac
 4. Visit **https://www.torn.com/**
 5. Enter your license key when prompted
 
-➡️ **Install Script:**  
-`https://raw.githubusercontent.com/YOURNAME/REPO/main/dist/torn-money-coach.user.js`
+install script
+https://raw.githubusercontent.com/curtdahurt/torn-money-coach/72aa3dae8dc6c74847eb7543eef779da93463433/money_coach.user.js)
 
 ---
 
