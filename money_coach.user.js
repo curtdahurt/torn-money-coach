@@ -1,326 +1,120 @@
 // ==UserScript==
 // @name         Torn Money Coach PRO
-// @namespace    https://torn.com/
-// @version      5.0.0
-// @description  Full Money Coach with licensing, newbie/trader modes, and auto-disable
-// @author       Curtdahurt
+// @version      6.0.0
+// @description  Full Desktop Money Coach with CE tracking
 // @match        https://www.torn.com/*
-// @grant        GM_addStyle
-// @grant        unsafeWindow
-// @connect      raw.githubusercontent.com
-// @update     https://raw.githubusercontent.com/curtdahurt/torn-money-coach/3fb94d3e6c06a1cb82e8267366be17fdcf43faa1/money_coach.user.js
-// @download   https://raw.githubusercontent.com/curtdahurt/torn-money-coach/3fb94d3e6c06a1cb82e8267366be17fdcf43faa1/money_coach.user.js
+// @grant        none
 // ==/UserScript==
 
-(() => {
-    'use strict';
+(function () {
+'use strict';
 
-    /***********************
-     * HARDENING (light)
-     ***********************/
-    if (window.__MC_PRO_LOADED__) return;
-    Object.defineProperty(window, '__MC_PRO_LOADED__', {
-        value: true,
-        configurable: false,
-        writable: false
-    });
+/* ==============================
+   🔐 CONFIG
+   ============================== */
 
-    /***********************
-     * LICENSE CONFIG
-     ***********************/
-    const LICENSE_URL =
-        'https://raw.githubusercontent.com/curtdahurt/torn-licenses/main/licenses.json';
-    const CACHE_HOURS = 6;
+const API_KEY = "PUT_YOUR_API_KEY_HERE";
 
-    const TIER_PRIORITY = {
-        trial: 0,
-        newbie: 1,
-        trader: 2,
-        faction: 3
-    };
+/* ==============================
+   🔐 EMBEDDED LICENSE
+   ============================== */
 
-    /***********************
-     * UTIL
-     ***********************/
-    const todayISO = () => new Date().toISOString().split('T')[0];
-    const daysUntil = d =>
-        Math.ceil((new Date(d) - new Date(todayISO())) / 86400000);
+const LICENSE_BLOB = "eyJ1c2VycyI6eyIxMjM0NTYiOnsidGllciI6InBybyIsImV4cGlyZXMiOiIyMDI2LTEyLTMxIn19LCJmYWN0aW9ucyI6e319";
 
-    const isLicenseValid = l =>
-        l && l.status === 'active' && todayISO() <= l.expires;
+function decodeLicense(blob) {
+    try { return JSON.parse(atob(blob)); }
+    catch { return { users:{}, factions:{} }; }
+}
 
-    const pickBest = list =>
-        list.sort(
-            (a, b) =>
-                (TIER_PRIORITY[b.tier] || 0) -
-                    (TIER_PRIORITY[a.tier] || 0) ||
-                new Date(b.expires) - new Date(a.expires)
-        )[0];
+const LICENSE_DATA = decodeLicense(LICENSE_BLOB);
 
-    /***********************
-     * LICENSE SYSTEM
-     ***********************/
-    function resolveLicense(uid, fid, licenses) {
-        const faction = [];
-        const individual = [];
+/* ==============================
+   🎯 LICENSE CHECK
+   ============================== */
 
-        for (const l of licenses) {
-            if (!isLicenseValid(l)) continue;
-            if (l.type === 'faction' && l.faction_id === fid) faction.push(l);
-            if (l.type === 'individual' && l.user_id === uid) individual.push(l);
-        }
+function checkLicense(userId) {
+    const today = new Date();
+    const lic = LICENSE_DATA.users[userId];
 
-        return faction.length
-            ? pickBest(faction)
-            : individual.length
-            ? pickBest(individual)
-            : null;
-    }
+    if (!lic) return { tier: "trial", active: false };
 
-    function runtimeLicense(lic) {
-        if (!lic) {
-            return {
-                valid: false,
-                expired: false,
-                tier: 'trial',
-                expires: null,
-                features: { newbie: true }
-            };
-        }
+    if (new Date(lic.expires) < today)
+        return { tier: "expired", active: false };
 
-        return {
-            valid: true,
-            expired: todayISO() > lic.expires,
-            tier: lic.tier,
-            expires: lic.expires,
-            features: lic.features || {}
-        };
-    }
+    return { tier: lic.tier, active: true, expires: lic.expires };
+}
 
-    function cacheGet() {
-        try {
-            const c = JSON.parse(localStorage.getItem('mc_license_cache'));
-            if (!c) return null;
-            if ((Date.now() - c.t) / 36e5 > CACHE_HOURS) return null;
-            return c.d;
-        } catch {
-            return null;
-        }
-    }
+/* ==============================
+   📊 CE FETCH
+   ============================== */
 
-    function cacheSet(d) {
-        localStorage.setItem(
-            'mc_license_cache',
-            JSON.stringify({ t: Date.now(), d })
-        );
-    }
+async function fetchCrimeExp() {
+    if (!API_KEY || API_KEY.includes("PUT")) return null;
 
-    async function loadLicenses() {
-        const cached = cacheGet();
-        if (cached) return cached;
+    const res = await fetch(
+        `https://api.torn.com/user/?selections=criminalrecord&key=${API_KEY}`
+    );
+    const data = await res.json();
+    return data.criminalrecord?.total || 0;
+}
 
-        const r = await fetch(LICENSE_URL, { cache: 'no-store' });
-        const j = await r.json();
-        cacheSet(j);
-        return j;
-    }
+/* ==============================
+   💡 CRIME LOGIC
+   ============================== */
 
-    /***********************
-     * CONFIG
-     ***********************/
-    const API_KEY = 'PUT_YOUR_API_KEY_HERE';
+function getCrimeFromCE(ce) {
+    if (ce < 1000) return "Shoplift";
+    if (ce < 5000) return "Warehouse Arson";
+    return "Bank Heist";
+}
 
-    const TRIAL_DAYS = 7;
+/* ==============================
+   🖥️ UI
+   ============================== */
 
-    const CRIME_RULES = [
-        { name: 'Shoplifting', minCE: 0, maxCE: 20, profit: 120000 },
-        { name: 'Pickpocketing', minCE: 20, maxCE: 40, profit: 180000 },
-        { name: 'Burglary', minCE: 40, maxCE: 9999, profit: 300000 }
-    ];
+function buildUI(license, ce) {
 
-    const HIGH_VALUE_ITEMS = ['Xanax', 'Drug Pack', 'Erotic DVD'];
+    const panel = document.createElement("div");
+    panel.style.cssText = `
+        background:#111;
+        color:#0f0;
+        padding:10px;
+        margin:10px;
+        border-radius:6px;
+        font-size:13px;
+    `;
 
-    /***********************
-     * STORAGE
-     ***********************/
-    const STORE = {
-        settings: 'mc_settings',
-        profit: 'mc_profit',
-        install: 'mc_install'
-    };
+    const tierText = license.active
+        ? `Tier: ${license.tier.toUpperCase()} (Expires ${license.expires})`
+        : `Tier: TRIAL`;
 
-    const settings =
-        JSON.parse(localStorage.getItem(STORE.settings)) || { mode: 'newbie' };
+    panel.innerHTML = `
+        <b>💰 Money Coach PRO</b><br>
+        ${tierText}<br><br>
+        Crime Experience: ${ce ?? "N/A"}<br>
+        Recommended Crime:<br>
+        <b>${ce !== null ? getCrimeFromCE(ce) : "API Required"}</b>
+    `;
 
-    let profitSaved = Number(localStorage.getItem(STORE.profit)) || 0;
+    document.body.prepend(panel);
+}
 
-    if (!localStorage.getItem(STORE.install)) {
-        localStorage.setItem(STORE.install, Date.now());
-    }
+/* ==============================
+   🚀 INIT
+   ============================== */
 
-    const daysSinceInstall = () =>
-        Math.floor(
-            (Date.now() - Number(localStorage.getItem(STORE.install))) /
-                86400000
-        );
+async function init() {
 
-    function saveProfit(n) {
-        profitSaved += n;
-        localStorage.setItem(STORE.profit, profitSaved);
-        updateProfitUI();
-    }
+    const userId =
+        document.querySelector("body")?.dataset?.uid ||
+        prompt("Enter your Torn User ID:");
 
-    /***********************
-     * API
-     ***********************/
-    async function fetchUser() {
-        const r = await fetch(
-            `https://api.torn.com/user/?selections=basic,crime&key=${API_KEY}`
-        );
-        return r.json();
-    }
+    const license = checkLicense(userId);
+    const ce = await fetchCrimeExp();
 
-    const getBestCrime = ce =>
-        CRIME_RULES.find(c => ce >= c.minCE && ce < c.maxCE);
+    buildUI(license, ce);
+}
 
-    /***********************
-     * UI
-     ***********************/
-    GM_addStyle(`
-        #mc-box {
-            background:#0f172a;
-            border:1px solid #334155;
-            padding:10px;
-            margin:10px 0;
-            border-radius:8px;
-            color:#e5e7eb;
-            font-size:12px;
-        }
-        #mc-box h3 { margin:0 0 6px; color:#7dd3fc }
-        .mc-profit { color:#4ade80; font-weight:600 }
-        .mc-muted { color:#94a3b8; font-size:11px }
-        .mc-warn { color:#fb7185; font-size:11px }
-        .mc-toggle { cursor:pointer; color:#7dd3fc }
-        .mc-rec { border-left:4px solid #4ade80; padding-left:6px }
-    `);
+init();
 
-    function injectBox(bestCrime, license) {
-        if (document.getElementById('mc-box')) return;
-
-        const trialLeft = Math.max(0, TRIAL_DAYS - daysSinceInstall());
-
-        const box = document.createElement('div');
-        box.id = 'mc-box';
-        box.innerHTML = `
-            <h3>💰 Money Coach PRO</h3>
-
-            <div>
-                Mode:
-                <span class="mc-toggle" id="mc-mode">
-                    ${settings.mode.toUpperCase()}
-                </span>
-            </div>
-
-            <div style="margin-top:6px">
-                Best crime: <b>${bestCrime.name}</b><br>
-                <span class="mc-profit">$${bestCrime.profit.toLocaleString()}/hr</span>
-            </div>
-
-            <div id="mc-profit-total" class="mc-muted"></div>
-
-            ${
-                license.valid
-                    ? `<div class="mc-muted">Tier: ${license.tier} (${daysUntil(
-                          license.expires
-                      )}d)</div>`
-                    : `<div class="mc-muted">Trial: ${trialLeft} day(s)</div>`
-            }
-
-            ${
-                license.expired
-                    ? `<div class="mc-warn">License expired — features disabled</div>`
-                    : ''
-            }
-        `;
-
-        document.querySelector('#column-right')?.prepend(box);
-
-        document.getElementById('mc-mode').onclick = () => {
-            settings.mode =
-                settings.mode === 'newbie' ? 'trader' : 'newbie';
-            localStorage.setItem(STORE.settings, JSON.stringify(settings));
-            location.reload();
-        };
-
-        updateProfitUI();
-    }
-
-    function updateProfitUI() {
-        const el = document.getElementById('mc-profit-total');
-        if (el)
-            el.innerText = `📈 Estimated value gained: $${profitSaved.toLocaleString()}`;
-    }
-
-    /***********************
-     * ENHANCEMENTS
-     ***********************/
-    function enhanceCrimes(bestCrime) {
-        if (!location.href.includes('crimes.php')) return;
-
-        document.querySelectorAll('.crime').forEach(el => {
-            if (el.innerText.includes(bestCrime.name)) {
-                el.classList.add('mc-rec');
-                if (!el.dataset.mcCounted) {
-                    el.dataset.mcCounted = '1';
-                    saveProfit(bestCrime.profit * 0.2);
-                }
-            }
-        });
-    }
-
-    function warnItems() {
-        document.querySelectorAll('body *').forEach(el => {
-            if (HIGH_VALUE_ITEMS.includes(el.innerText) && !el.dataset.mcWarn) {
-                el.dataset.mcWarn = '1';
-                el.insertAdjacentHTML(
-                    'afterend',
-                    `<div class="mc-warn">⚠️ Check market value before selling</div>`
-                );
-                if (settings.mode === 'newbie') saveProfit(250000);
-            }
-        });
-    }
-
-    /***********************
-     * INIT
-     ***********************/
-    async function init() {
-        if (!API_KEY || API_KEY.includes('PUT_YOUR_API_KEY')) return;
-
-        const uid = unsafeWindow.userID;
-        const fid = unsafeWindow.factionID || null;
-
-        const licenses = await loadLicenses();
-        const lic = runtimeLicense(resolveLicense(uid, fid, licenses));
-
-        if (lic.expired) {
-            injectBox({ name: '—', profit: 0 }, lic);
-            return;
-        }
-
-        if (!lic.features.trader) settings.mode = 'newbie';
-
-        const user = await fetchUser();
-        if (!user || user.error) return;
-
-        const bestCrime = getBestCrime(user.crimeexperience || 0);
-        injectBox(bestCrime, lic);
-
-        if (lic.features.profit) {
-            enhanceCrimes(bestCrime);
-            warnItems();
-        }
-    }
-
-    setTimeout(init, 1200);
 })();
